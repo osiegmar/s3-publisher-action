@@ -1,0 +1,42 @@
+name: 'S3 Publisher'
+author: 'Oliver Siegmar'
+description: 'Publish files to S3 by maintaining file (glob) specific metadata'
+inputs:
+  bucket:
+    description: 'Destination S3 bucket to publish to'
+    required: true
+  prefix:
+    description: 'S3 path prefix'
+  dir:
+    description: 'Source directory read files from'
+    required: true
+  includes:
+    description: 'File glob to include'
+    default: '**/*'
+    required: true
+  excludes:
+    description: 'File glob to exclude'
+  order:
+    description: 'File processing order globs'
+  cache-control:
+    description: 'Cache-Control configuration'
+  force-upload:
+    description: 'Force publish (skip modification check)'
+    default: 'false'
+    required: true
+  delete-orphaned:
+    description: 'Delete remote files that do not exist locally'
+    default: 'false'
+    required: true
+  wait-before-delete:
+    description: 'Milliseconds to wait before deleting files in order to prevent deletions during requests'
+  dry-run:
+    description: 'Disable real changes'
+    default: 'false'
+    required: true
+runs:
+  using: 'node16'
+  main: 'dist/index.js'
+branding:
+  icon: upload-cloud
+  color: green

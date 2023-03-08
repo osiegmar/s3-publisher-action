@@ -6,7 +6,7 @@ A very basic configuration for publishing files from a `public` directory to a
 bucket called `my-bucket-name`:
 
 ```yaml
-- uses: osiegmar/s3-publisher@v1
+- uses: osiegmar/s3-publisher-action@v1
   with:
     bucket: my-bucket-name
     dir: public
@@ -54,7 +54,7 @@ jobs:
           role-to-assume: arn:aws:iam::XXXXXXXXXXXX:role/github-actions
           aws-region: eu-central-1
 
-      - uses: osiegmar/s3-publisher@v1
+      - uses: osiegmar/s3-publisher-action@v1
         with:
           bucket: my-bucket-name
           dir: ./public
@@ -67,7 +67,7 @@ GitHubs [Encrypted secrets](https://docs.github.com/de/actions/security-guides/e
 feature to configure authentication manually. **This is not recommended!**
 
 ```yaml
-- uses: osiegmar/s3-publisher@v1
+- uses: osiegmar/s3-publisher-action@v1
   with:
     bucket: my-bucket-name
     dir: ./public
@@ -175,7 +175,7 @@ some old CSS/JS files). By default, no wait will happen.
 **Sync all from `public` and delete orphaned files after waiting 3 seconds:**
 
 ```yaml
-- uses: osiegmar/s3-publisher@v1
+- uses: osiegmar/s3-publisher-action@v1
   with:
     bucket: my-bucket-name
     dir: public
@@ -186,7 +186,7 @@ some old CSS/JS files). By default, no wait will happen.
 **Sync everything but `.gitkeep` files:**
 
 ```yaml
-- uses: osiegmar/s3-publisher@v1
+- uses: osiegmar/s3-publisher-action@v1
   with:
     bucket: my-bucket-name
     dir: public
@@ -197,7 +197,7 @@ some old CSS/JS files). By default, no wait will happen.
 and `.bak` files:**
 
 ```yaml
-- uses: osiegmar/s3-publisher@v1
+- uses: osiegmar/s3-publisher-action@v1
   with:
     bucket: my-bucket-name
     dir: public
@@ -212,7 +212,7 @@ and `.bak` files:**
 **Sync all from `public` and set Cache-Control headers:**
 
 ```yaml
-- uses: osiegmar/s3-publisher@v1
+- uses: osiegmar/s3-publisher-action@v1
   with:
     bucket: my-bucket-name
     dir: public
@@ -225,7 +225,7 @@ and `.bak` files:**
 **Sync all from `public` and start with `.css` files, then `.js` files, then everything else:**
 
 ```yaml
-- uses: osiegmar/s3-publisher@v1
+- uses: osiegmar/s3-publisher-action@v1
   with:
     bucket: my-bucket-name
     dir: public

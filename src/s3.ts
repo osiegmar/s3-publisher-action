@@ -54,10 +54,6 @@ export class S3 {
     }
 
     async uploadFiles(syncFiles: SyncFile[]): Promise<void> {
-        if (this.dryRun) {
-            return
-        }
-
         for (const syncFile of syncFiles) {
             const destFile = this.prefix + syncFile.filename
 
@@ -68,17 +64,19 @@ export class S3 {
                 `Upload ${syncFile.filename} to s3://${destFile} (type=${contentType}; Cache-Control=${cacheControl})`
             )
 
-            const command = new PutObjectCommand({
-                Bucket: this.bucket,
-                Key: destFile,
-                ContentLength: syncFile.size,
-                ContentMD5: syncFile.checksum.toString('base64'),
-                ContentType: contentType,
-                CacheControl: cacheControl,
-                Body: fs.createReadStream(syncFile.filename)
-            })
-            await this.client.send(command)
-            core.debug(`Uploaded ${destFile}`)
+            if (!this.dryRun) {
+                const command = new PutObjectCommand({
+                    Bucket: this.bucket,
+                    Key: destFile,
+                    ContentLength: syncFile.size,
+                    ContentMD5: syncFile.checksum.toString('base64'),
+                    ContentType: contentType,
+                    CacheControl: cacheControl,
+                    Body: fs.createReadStream(syncFile.filename)
+                })
+                await this.client.send(command)
+                core.debug(`Uploaded ${destFile}`)
+            }
         }
     }
 

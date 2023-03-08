@@ -87,13 +87,13 @@ async function run(): Promise<void> {
         }
 
         if (deletedFiles.length > 0) {
-            core.info(`Delete ${deletedFiles.length} orphaned files`)
             if (!dryRun && waitBeforeDelete) {
                 core.info(
                     `Wait ${waitBeforeDelete} milliseconds before deleting files (prevent failed access to stale references)`
                 )
                 await new Promise(r => setTimeout(r, waitBeforeDelete))
             }
+            core.info(`Delete ${deletedFiles.length} orphaned files`)
             await client.deleteFiles(deletedFiles)
         }
 

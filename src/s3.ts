@@ -60,9 +60,7 @@ export class S3 {
             const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream'
             const cacheControl = this.resolveCacheControl(syncFile.filename)
 
-            core.info(
-                `Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`
-            )
+            core.info(`Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`)
 
             if (!this.dryRun) {
                 const command = new PutObjectCommand({

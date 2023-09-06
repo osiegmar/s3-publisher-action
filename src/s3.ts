@@ -61,7 +61,7 @@ export class S3 {
             const cacheControl = this.resolveCacheControl(syncFile.filename)
 
             core.info(
-                `Upload ${syncFile.filename} to s3://${destFile} (type=${contentType}; Cache-Control=${cacheControl})`
+                `Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`
             )
 
             if (!this.dryRun) {

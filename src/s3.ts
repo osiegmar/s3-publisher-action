@@ -4,6 +4,7 @@ import fs from 'fs'
 import * as core from '@actions/core'
 import {minimatch} from 'minimatch'
 import {RemoteFiles, SyncFile, CacheControl} from './types'
+import async from 'async'
 
 export class S3 {
     private client: S3Client
@@ -54,28 +55,43 @@ export class S3 {
     }
 
     async uploadFiles(syncFiles: SyncFile[]): Promise<void> {
-        for (const syncFile of syncFiles) {
-            const destFile = this.prefix + syncFile.filename
+        const queue = async.queue((syncFile: SyncFile, callback) => {
+            this.uploadFile(syncFile, callback)
+        }, 10)
 
-            const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream'
-            const cacheControl = this.resolveCacheControl(syncFile.filename)
+        await queue.push(syncFiles)
+        await queue.drain()
+    }
 
-            core.info(`Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`)
+    private uploadFile(syncFile: SyncFile, callback: async.ErrorCallback<Error>): void {
+        const destFile = this.prefix + syncFile.filename
 
-            if (!this.dryRun) {
-                const command = new PutObjectCommand({
-                    Bucket: this.bucket,
-                    Key: destFile,
-                    ContentLength: syncFile.size,
-                    ContentMD5: syncFile.checksum.toString('base64'),
-                    ContentType: contentType,
-                    CacheControl: cacheControl,
-                    Body: fs.createReadStream(syncFile.filename)
-                })
-                await this.client.send(command)
+        const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream'
+        const cacheControl = this.resolveCacheControl(syncFile.filename)
+
+        core.info(`Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`)
+
+        if (this.dryRun) {
+            return
+        }
+
+        const command = new PutObjectCommand({
+            Bucket: this.bucket,
+            Key: destFile,
+            ContentLength: syncFile.size,
+            ContentMD5: syncFile.checksum.toString('base64'),
+            ContentType: contentType,
+            CacheControl: cacheControl,
+            Body: fs.createReadStream(syncFile.filename)
+        })
+        this.client.send(command, err => {
+            if (err) {
+                core.error(`Error uploading to ${destFile}`)
+            } else {
                 core.debug(`Uploaded ${destFile}`)
             }
-        }
+            callback(err)
+        })
     }
 
     resolveCacheControl(filename: string): string | undefined {

@@ -268,6 +268,10 @@ class S3 {
                     ContinuationToken
                 });
                 const response = yield this.client.send(command);
+                if (response.$metadata.httpStatusCode !== 200) {
+                    throw new Error(`Failed to list objects in bucket ${this.bucket}:
+                    S3 responded with status ${response.$metadata.httpStatusCode}`);
+                }
                 for (const e of (_a = response.Contents) !== null && _a !== void 0 ? _a : []) {
                     const filename = this.prefix ? (_b = e.Key) === null || _b === void 0 ? void 0 : _b.substring(this.prefix.length) : e.Key;
                     if (filename) {
@@ -278,12 +282,10 @@ class S3 {
                         };
                     }
                 }
-                if (response.IsTruncated) {
-                    ContinuationToken = response.NextContinuationToken;
-                }
-                else {
+                if (!response.IsTruncated) {
                     break;
                 }
+                ContinuationToken = response.NextContinuationToken;
             }
             return files;
         });
@@ -316,7 +318,7 @@ class S3 {
         });
         this.client.send(command, err => {
             if (err) {
-                core.error(`Error uploading to ${destFile}`);
+                core.error(`Error uploading to ${destFile}: ${err}`);
             }
             else {
                 core.debug(`Uploaded ${destFile}`);

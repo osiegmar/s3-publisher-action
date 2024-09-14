@@ -33,6 +33,11 @@ export class S3 {
             })
             const response = await this.client.send(command)
 
+            if (response.$metadata.httpStatusCode !== 200) {
+                throw new Error(`Failed to list objects in bucket ${this.bucket}:
+                    S3 responded with status ${response.$metadata.httpStatusCode}`)
+            }
+
             for (const e of response.Contents ?? []) {
                 const filename: string | undefined = this.prefix ? e.Key?.substring(this.prefix.length) : e.Key
                 if (filename) {
@@ -44,11 +49,11 @@ export class S3 {
                 }
             }
 
-            if (response.IsTruncated) {
-                ContinuationToken = response.NextContinuationToken
-            } else {
+            if (!response.IsTruncated) {
                 break
             }
+
+            ContinuationToken = response.NextContinuationToken
         }
 
         return files
@@ -86,7 +91,7 @@ export class S3 {
         })
         this.client.send(command, err => {
             if (err) {
-                core.error(`Error uploading to ${destFile}`)
+                core.error(`Error uploading to ${destFile}: ${err}`)
             } else {
                 core.debug(`Uploaded ${destFile}`)
             }

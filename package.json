@@ -1,6 +1,6 @@
 {
   "name": "s3-publisher-action",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "description": "Publish files to S3 by maintaining file (glob) specific metadata",
   "main": "lib/main.js",

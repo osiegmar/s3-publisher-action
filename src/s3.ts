@@ -1,10 +1,11 @@
-import {DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand, S3Client} from '@aws-sdk/client-s3'
+import {DeleteObjectsCommand, ListObjectsV2Command, S3Client} from '@aws-sdk/client-s3'
 import * as mime from 'mime-types'
 import fs from 'fs'
 import * as core from '@actions/core'
 import {minimatch} from 'minimatch'
-import {RemoteFiles, SyncFile, CacheControl} from './types'
+import {RemoteFiles, SyncFile, CacheControl, PART_SIZE} from './types'
 import async from 'async'
+import {Upload} from '@aws-sdk/lib-storage'
 
 export class S3 {
     private client: S3Client
@@ -60,15 +61,12 @@ export class S3 {
     }
 
     async uploadFiles(syncFiles: SyncFile[]): Promise<void> {
-        const queue = async.queue((syncFile: SyncFile, callback) => {
-            this.uploadFile(syncFile, callback)
-        }, 10)
-
-        await queue.push(syncFiles)
-        await queue.drain()
+        await async.mapLimit(syncFiles, 5, async (syncFile: SyncFile) => {
+            await this.uploadFile(syncFile)
+        })
     }
 
-    private uploadFile(syncFile: SyncFile, callback: async.ErrorCallback<Error>): void {
+    private async uploadFile(syncFile: SyncFile): Promise<void> {
         const destFile = this.prefix + syncFile.filename
 
         const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream'
@@ -80,23 +78,36 @@ export class S3 {
             return
         }
 
-        const command = new PutObjectCommand({
-            Bucket: this.bucket,
-            Key: destFile,
-            ContentLength: syncFile.size,
-            ContentMD5: syncFile.checksum.toString('base64'),
-            ContentType: contentType,
-            CacheControl: cacheControl,
-            Body: fs.createReadStream(syncFile.filename)
-        })
-        this.client.send(command, err => {
-            if (err) {
-                core.error(`Error uploading to ${destFile}: ${err}`)
-            } else {
-                core.debug(`Uploaded ${destFile}`)
+        // Due to https://github.com/aws/aws-sdk-js-v3/issues/4321, we can't set the ContentMD5 header
+
+        const upload = new Upload({
+            client: this.client,
+            partSize: PART_SIZE,
+            queueSize: 2,
+            params: {
+                Bucket: this.bucket,
+                Key: destFile,
+                ContentLength: syncFile.size,
+                // ContentMD5: syncFile.checksum,
+                ContentType: contentType,
+                CacheControl: cacheControl,
+                Body: fs.createReadStream(syncFile.filename)
             }
-            callback(err)
         })
+
+        upload.on('httpUploadProgress', progress => {
+            if (progress.loaded && progress.total && progress.loaded < progress.total) {
+                const pct = Math.floor((progress.loaded / progress.total) * 100)
+                core.debug(`Uploaded ${pct} % of ${destFile}`)
+            }
+        })
+
+        try {
+            await upload.done()
+            core.info(`Finished uploading ${destFile}`)
+        } catch (e) {
+            core.error(`Error uploading to ${destFile}: ${e}`)
+        }
     }
 
     resolveCacheControl(filename: string): string | undefined {

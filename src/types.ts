@@ -1,5 +1,9 @@
-import crypto from 'crypto'
 import fs from 'fs'
+import {generateETag} from 's3-etag'
+
+// While 5 MB is the minimum part size for a multipart upload,
+// the current default part size used by AWS is 16 MB.
+export const PART_SIZE = 16 * 1024 * 1024
 
 export type RemoteFile = {
     filename: string
@@ -14,7 +18,7 @@ export type RemoteFiles = {
 export class SyncFile {
     private readonly _filename: string
     private _size?: number
-    private _checksum?: Buffer
+    private _checksum?: string
 
     constructor(filename: string) {
         this._filename = filename
@@ -28,9 +32,8 @@ export class SyncFile {
         return (this._size = this._size || fs.statSync(this._filename).size)
     }
 
-    get checksum(): Buffer {
-        return (this._checksum =
-            this._checksum || crypto.createHash('md5').update(fs.readFileSync(this._filename)).digest())
+    get checksum(): string {
+        return (this._checksum = this._checksum || generateETag(this._filename, PART_SIZE))
     }
 }
 

@@ -183,16 +183,16 @@ function isFileSizeChange(syncFile, remoteFile) {
     if (syncFile.size === remoteFile.size) {
         return false;
     }
-    core.debug(`File size change (${remoteFile.size} -> ${syncFile.size})`);
+    core.debug(`File size of ${syncFile.filename} change (${remoteFile.size} -> ${syncFile.size})`);
     return true;
 }
 function isEtagChange(syncFile, remoteFile) {
-    const localMd5 = syncFile.checksum.toString('hex');
+    const localMd5 = syncFile.checksum;
     const remoteMd5 = remoteFile.etag.substring(1, remoteFile.etag.lastIndexOf('"'));
     if (remoteMd5 === localMd5) {
         return false;
     }
-    core.debug(`Etag changed ('${remoteMd5}' -> '${localMd5}')`);
+    core.debug(`Etag of ${syncFile.filename} changed ('${remoteMd5}' -> '${localMd5}')`);
     return true;
 }
 run();
@@ -247,7 +247,9 @@ const mime = __importStar(__nccwpck_require__(3583));
 const fs_1 = __importDefault(__nccwpck_require__(7147));
 const core = __importStar(__nccwpck_require__(2186));
 const minimatch_1 = __nccwpck_require__(4501);
+const types_1 = __nccwpck_require__(8164);
 const async_1 = __importDefault(__nccwpck_require__(7888));
+const lib_storage_1 = __nccwpck_require__(3087);
 class S3 {
     constructor(bucket, prefix, cacheControl, dryRun) {
         this.client = new client_s3_1.S3Client({});
@@ -292,38 +294,48 @@ class S3 {
     }
     uploadFiles(syncFiles) {
         return __awaiter(this, void 0, void 0, function* () {
-            const queue = async_1.default.queue((syncFile, callback) => {
-                this.uploadFile(syncFile, callback);
-            }, 10);
-            yield queue.push(syncFiles);
-            yield queue.drain();
+            yield async_1.default.mapLimit(syncFiles, 5, (syncFile) => __awaiter(this, void 0, void 0, function* () {
+                yield this.uploadFile(syncFile);
+            }));
         });
     }
-    uploadFile(syncFile, callback) {
-        const destFile = this.prefix + syncFile.filename;
-        const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream';
-        const cacheControl = this.resolveCacheControl(syncFile.filename);
-        core.info(`Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`);
-        if (this.dryRun) {
-            return;
-        }
-        const command = new client_s3_1.PutObjectCommand({
-            Bucket: this.bucket,
-            Key: destFile,
-            ContentLength: syncFile.size,
-            ContentMD5: syncFile.checksum.toString('base64'),
-            ContentType: contentType,
-            CacheControl: cacheControl,
-            Body: fs_1.default.createReadStream(syncFile.filename)
-        });
-        this.client.send(command, err => {
-            if (err) {
-                core.error(`Error uploading to ${destFile}: ${err}`);
+    uploadFile(syncFile) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const destFile = this.prefix + syncFile.filename;
+            const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream';
+            const cacheControl = this.resolveCacheControl(syncFile.filename);
+            core.info(`Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`);
+            if (this.dryRun) {
+                return;
             }
-            else {
-                core.debug(`Uploaded ${destFile}`);
+            // Due to https://github.com/aws/aws-sdk-js-v3/issues/4321, we can't set the ContentMD5 header
+            const upload = new lib_storage_1.Upload({
+                client: this.client,
+                partSize: types_1.PART_SIZE,
+                queueSize: 2,
+                params: {
+                    Bucket: this.bucket,
+                    Key: destFile,
+                    ContentLength: syncFile.size,
+                    // ContentMD5: syncFile.checksum,
+                    ContentType: contentType,
+                    CacheControl: cacheControl,
+                    Body: fs_1.default.createReadStream(syncFile.filename)
+                }
+            });
+            upload.on('httpUploadProgress', progress => {
+                if (progress.loaded && progress.total && progress.loaded < progress.total) {
+                    const pct = Math.floor((progress.loaded / progress.total) * 100);
+                    core.debug(`Uploaded ${pct} % of ${destFile}`);
+                }
+            });
+            try {
+                yield upload.done();
+                core.info(`Finished uploading ${destFile}`);
             }
-            callback(err);
+            catch (e) {
+                core.error(`Error uploading to ${destFile}: ${e}`);
+            }
         });
     }
     resolveCacheControl(filename) {
@@ -366,9 +378,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.CacheControl = exports.SyncFile = void 0;
-const crypto_1 = __importDefault(__nccwpck_require__(6113));
+exports.CacheControl = exports.SyncFile = exports.PART_SIZE = void 0;
 const fs_1 = __importDefault(__nccwpck_require__(7147));
+const s3_etag_1 = __nccwpck_require__(1533);
+// While 5 MB is the minimum part size for a multipart upload,
+// the current default part size used by AWS is 16 MB.
+exports.PART_SIZE = 16 * 1024 * 1024;
 class SyncFile {
     constructor(filename) {
         this._filename = filename;
@@ -380,8 +395,7 @@ class SyncFile {
         return (this._size = this._size || fs_1.default.statSync(this._filename).size);
     }
     get checksum() {
-        return (this._checksum =
-            this._checksum || crypto_1.default.createHash('md5').update(fs_1.default.readFileSync(this._filename)).digest());
+        return (this._checksum = this._checksum || (0, s3_etag_1.generateETag)(this._filename, exports.PART_SIZE));
     }
 }
 exports.SyncFile = SyncFile;
@@ -19473,6 +19487,528 @@ __reExport(src_exports, __nccwpck_require__(7905), module.exports);
 
 /***/ }),
 
+/***/ 3087:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/index.ts
+var src_exports = {};
+__export(src_exports, {
+  Upload: () => Upload
+});
+module.exports = __toCommonJS(src_exports);
+
+// src/Upload.ts
+var import_client_s3 = __nccwpck_require__(9250);
+var import_abort_controller = __nccwpck_require__(7020);
+var import_middleware_endpoint = __nccwpck_require__(2918);
+var import_smithy_client = __nccwpck_require__(3570);
+var import_events = __nccwpck_require__(2361);
+
+// src/bytelength.ts
+var import_buffer = __nccwpck_require__(4300);
+var import_runtimeConfig = __nccwpck_require__(3407);
+var byteLength = /* @__PURE__ */ __name((input) => {
+  if (input === null || input === void 0)
+    return 0;
+  if (typeof input === "string") {
+    return import_buffer.Buffer.byteLength(input);
+  }
+  if (typeof input.byteLength === "number") {
+    return input.byteLength;
+  } else if (typeof input.length === "number") {
+    return input.length;
+  } else if (typeof input.size === "number") {
+    return input.size;
+  } else if (typeof input.path === "string") {
+    try {
+      return import_runtimeConfig.ClientDefaultValues.lstatSync(input.path).size;
+    } catch (error) {
+      return void 0;
+    }
+  }
+  return void 0;
+}, "byteLength");
+
+// src/chunker.ts
+
+var import_stream = __nccwpck_require__(2781);
+
+// src/chunks/getChunkStream.ts
+
+async function* getChunkStream(data, partSize, getNextData) {
+  let partNumber = 1;
+  const currentBuffer = { chunks: [], length: 0 };
+  for await (const datum of getNextData(data)) {
+    currentBuffer.chunks.push(datum);
+    currentBuffer.length += datum.byteLength;
+    while (currentBuffer.length > partSize) {
+      const dataChunk = currentBuffer.chunks.length > 1 ? import_buffer.Buffer.concat(currentBuffer.chunks) : currentBuffer.chunks[0];
+      yield {
+        partNumber,
+        data: dataChunk.subarray(0, partSize)
+      };
+      currentBuffer.chunks = [dataChunk.subarray(partSize)];
+      currentBuffer.length = currentBuffer.chunks[0].byteLength;
+      partNumber += 1;
+    }
+  }
+  yield {
+    partNumber,
+    data: currentBuffer.chunks.length !== 1 ? import_buffer.Buffer.concat(currentBuffer.chunks) : currentBuffer.chunks[0],
+    lastPart: true
+  };
+}
+__name(getChunkStream, "getChunkStream");
+
+// src/chunks/getChunkUint8Array.ts
+async function* getChunkUint8Array(data, partSize) {
+  let partNumber = 1;
+  let startByte = 0;
+  let endByte = partSize;
+  while (endByte < data.byteLength) {
+    yield {
+      partNumber,
+      data: data.subarray(startByte, endByte)
+    };
+    partNumber += 1;
+    startByte = endByte;
+    endByte = startByte + partSize;
+  }
+  yield {
+    partNumber,
+    data: data.subarray(startByte),
+    lastPart: true
+  };
+}
+__name(getChunkUint8Array, "getChunkUint8Array");
+
+// src/chunks/getDataReadable.ts
+
+async function* getDataReadable(data) {
+  for await (const chunk of data) {
+    if (import_buffer.Buffer.isBuffer(chunk) || chunk instanceof Uint8Array) {
+      yield chunk;
+    } else {
+      yield import_buffer.Buffer.from(chunk);
+    }
+  }
+}
+__name(getDataReadable, "getDataReadable");
+
+// src/chunks/getDataReadableStream.ts
+
+async function* getDataReadableStream(data) {
+  const reader = data.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return;
+      }
+      if (import_buffer.Buffer.isBuffer(value) || value instanceof Uint8Array) {
+        yield value;
+      } else {
+        yield import_buffer.Buffer.from(value);
+      }
+    }
+  } catch (e) {
+    throw e;
+  } finally {
+    reader.releaseLock();
+  }
+}
+__name(getDataReadableStream, "getDataReadableStream");
+
+// src/chunker.ts
+var getChunk = /* @__PURE__ */ __name((data, partSize) => {
+  if (data instanceof Uint8Array) {
+    return getChunkUint8Array(data, partSize);
+  }
+  if (data instanceof import_stream.Readable) {
+    return getChunkStream(data, partSize, getDataReadable);
+  }
+  if (data instanceof String || typeof data === "string") {
+    return getChunkUint8Array(import_buffer.Buffer.from(data), partSize);
+  }
+  if (typeof data.stream === "function") {
+    return getChunkStream(data.stream(), partSize, getDataReadableStream);
+  }
+  if (data instanceof ReadableStream) {
+    return getChunkStream(data, partSize, getDataReadableStream);
+  }
+  throw new Error(
+    "Body Data is unsupported format, expected data to be one of: string | Uint8Array | Buffer | Readable | ReadableStream | Blob;."
+  );
+}, "getChunk");
+
+// src/Upload.ts
+var MIN_PART_SIZE = 1024 * 1024 * 5;
+var _Upload = class _Upload extends import_events.EventEmitter {
+  constructor(options) {
+    super();
+    /**
+     * S3 multipart upload does not allow more than 10,000 parts.
+     */
+    this.MAX_PARTS = 1e4;
+    // Defaults.
+    this.queueSize = 4;
+    this.partSize = MIN_PART_SIZE;
+    this.leavePartsOnError = false;
+    this.tags = [];
+    this.concurrentUploaders = [];
+    this.abortMultipartUploadCommand = null;
+    this.uploadedParts = [];
+    this.uploadEnqueuedPartsCount = 0;
+    this.isMultiPart = true;
+    this.sent = false;
+    this.queueSize = options.queueSize || this.queueSize;
+    this.partSize = options.partSize || this.partSize;
+    this.leavePartsOnError = options.leavePartsOnError || this.leavePartsOnError;
+    this.tags = options.tags || this.tags;
+    this.client = options.client;
+    this.params = options.params;
+    this.__validateInput();
+    this.totalBytes = byteLength(this.params.Body);
+    this.bytesUploadedSoFar = 0;
+    this.abortController = options.abortController ?? new import_abort_controller.AbortController();
+  }
+  async abort() {
+    this.abortController.abort();
+  }
+  async done() {
+    if (this.sent) {
+      throw new Error(
+        "@aws-sdk/lib-storage: this instance of Upload has already executed .done(). Create a new instance."
+      );
+    }
+    this.sent = true;
+    return await Promise.race([this.__doMultipartUpload(), this.__abortTimeout(this.abortController.signal)]);
+  }
+  on(event, listener) {
+    this.uploadEvent = event;
+    return super.on(event, listener);
+  }
+  async __uploadUsingPut(dataPart) {
+    var _a;
+    this.isMultiPart = false;
+    const params = { ...this.params, Body: dataPart.data };
+    const clientConfig = this.client.config;
+    const requestHandler = clientConfig.requestHandler;
+    const eventEmitter = requestHandler instanceof import_events.EventEmitter ? requestHandler : null;
+    const uploadEventListener = /* @__PURE__ */ __name((event) => {
+      this.bytesUploadedSoFar = event.loaded;
+      this.totalBytes = event.total;
+      this.__notifyProgress({
+        loaded: this.bytesUploadedSoFar,
+        total: this.totalBytes,
+        part: dataPart.partNumber,
+        Key: this.params.Key,
+        Bucket: this.params.Bucket
+      });
+    }, "uploadEventListener");
+    if (eventEmitter !== null) {
+      eventEmitter.on("xhr.upload.progress", uploadEventListener);
+    }
+    const resolved = await Promise.all([this.client.send(new import_client_s3.PutObjectCommand(params)), (_a = clientConfig == null ? void 0 : clientConfig.endpoint) == null ? void 0 : _a.call(clientConfig)]);
+    const putResult = resolved[0];
+    let endpoint = resolved[1];
+    if (!endpoint) {
+      endpoint = (0, import_middleware_endpoint.toEndpointV1)(
+        await (0, import_middleware_endpoint.getEndpointFromInstructions)(params, import_client_s3.PutObjectCommand, {
+          ...clientConfig
+        })
+      );
+    }
+    if (!endpoint) {
+      throw new Error('Could not resolve endpoint from S3 "client.config.endpoint()" nor EndpointsV2.');
+    }
+    if (eventEmitter !== null) {
+      eventEmitter.off("xhr.upload.progress", uploadEventListener);
+    }
+    const locationKey = this.params.Key.split("/").map((segment) => (0, import_smithy_client.extendedEncodeURIComponent)(segment)).join("/");
+    const locationBucket = (0, import_smithy_client.extendedEncodeURIComponent)(this.params.Bucket);
+    const Location = (() => {
+      const endpointHostnameIncludesBucket = endpoint.hostname.startsWith(`${locationBucket}.`);
+      const forcePathStyle = this.client.config.forcePathStyle;
+      const optionalPort = endpoint.port ? `:${endpoint.port}` : ``;
+      if (forcePathStyle) {
+        return `${endpoint.protocol}//${endpoint.hostname}${optionalPort}/${locationBucket}/${locationKey}`;
+      }
+      if (endpointHostnameIncludesBucket) {
+        return `${endpoint.protocol}//${endpoint.hostname}${optionalPort}/${locationKey}`;
+      }
+      return `${endpoint.protocol}//${locationBucket}.${endpoint.hostname}${optionalPort}/${locationKey}`;
+    })();
+    this.singleUploadResult = {
+      ...putResult,
+      Bucket: this.params.Bucket,
+      Key: this.params.Key,
+      Location
+    };
+    const totalSize = byteLength(dataPart.data);
+    this.__notifyProgress({
+      loaded: totalSize,
+      total: totalSize,
+      part: 1,
+      Key: this.params.Key,
+      Bucket: this.params.Bucket
+    });
+  }
+  async __createMultipartUpload() {
+    if (!this.createMultiPartPromise) {
+      const createCommandParams = { ...this.params, Body: void 0 };
+      this.createMultiPartPromise = this.client.send(new import_client_s3.CreateMultipartUploadCommand(createCommandParams)).then((createMpuResponse) => {
+        this.abortMultipartUploadCommand = new import_client_s3.AbortMultipartUploadCommand({
+          Bucket: this.params.Bucket,
+          Key: this.params.Key,
+          UploadId: createMpuResponse.UploadId
+        });
+        return createMpuResponse;
+      });
+    }
+    return this.createMultiPartPromise;
+  }
+  async __doConcurrentUpload(dataFeeder) {
+    for await (const dataPart of dataFeeder) {
+      if (this.uploadEnqueuedPartsCount > this.MAX_PARTS) {
+        throw new Error(
+          `Exceeded ${this.MAX_PARTS} parts in multipart upload to Bucket: ${this.params.Bucket} Key: ${this.params.Key}.`
+        );
+      }
+      if (this.abortController.signal.aborted) {
+        return;
+      }
+      if (dataPart.partNumber === 1 && dataPart.lastPart) {
+        return await this.__uploadUsingPut(dataPart);
+      }
+      if (!this.uploadId) {
+        const { UploadId } = await this.__createMultipartUpload();
+        this.uploadId = UploadId;
+        if (this.abortController.signal.aborted) {
+          return;
+        }
+      }
+      const partSize = byteLength(dataPart.data) || 0;
+      const requestHandler = this.client.config.requestHandler;
+      const eventEmitter = requestHandler instanceof import_events.EventEmitter ? requestHandler : null;
+      let lastSeenBytes = 0;
+      const uploadEventListener = /* @__PURE__ */ __name((event, request) => {
+        const requestPartSize = Number(request.query["partNumber"]) || -1;
+        if (requestPartSize !== dataPart.partNumber) {
+          return;
+        }
+        if (event.total && partSize) {
+          this.bytesUploadedSoFar += event.loaded - lastSeenBytes;
+          lastSeenBytes = event.loaded;
+        }
+        this.__notifyProgress({
+          loaded: this.bytesUploadedSoFar,
+          total: this.totalBytes,
+          part: dataPart.partNumber,
+          Key: this.params.Key,
+          Bucket: this.params.Bucket
+        });
+      }, "uploadEventListener");
+      if (eventEmitter !== null) {
+        eventEmitter.on("xhr.upload.progress", uploadEventListener);
+      }
+      this.uploadEnqueuedPartsCount += 1;
+      const partResult = await this.client.send(
+        new import_client_s3.UploadPartCommand({
+          ...this.params,
+          // dataPart.data is chunked into a non-streaming buffer
+          // so the ContentLength from the input should not be used for MPU.
+          ContentLength: void 0,
+          UploadId: this.uploadId,
+          Body: dataPart.data,
+          PartNumber: dataPart.partNumber
+        })
+      );
+      if (eventEmitter !== null) {
+        eventEmitter.off("xhr.upload.progress", uploadEventListener);
+      }
+      if (this.abortController.signal.aborted) {
+        return;
+      }
+      if (!partResult.ETag) {
+        throw new Error(
+          `Part ${dataPart.partNumber} is missing ETag in UploadPart response. Missing Bucket CORS configuration for ETag header?`
+        );
+      }
+      this.uploadedParts.push({
+        PartNumber: dataPart.partNumber,
+        ETag: partResult.ETag,
+        ...partResult.ChecksumCRC32 && { ChecksumCRC32: partResult.ChecksumCRC32 },
+        ...partResult.ChecksumCRC32C && { ChecksumCRC32C: partResult.ChecksumCRC32C },
+        ...partResult.ChecksumSHA1 && { ChecksumSHA1: partResult.ChecksumSHA1 },
+        ...partResult.ChecksumSHA256 && { ChecksumSHA256: partResult.ChecksumSHA256 }
+      });
+      if (eventEmitter === null) {
+        this.bytesUploadedSoFar += partSize;
+      }
+      this.__notifyProgress({
+        loaded: this.bytesUploadedSoFar,
+        total: this.totalBytes,
+        part: dataPart.partNumber,
+        Key: this.params.Key,
+        Bucket: this.params.Bucket
+      });
+    }
+  }
+  async __doMultipartUpload() {
+    const dataFeeder = getChunk(this.params.Body, this.partSize);
+    const concurrentUploaderFailures = [];
+    for (let index = 0; index < this.queueSize; index++) {
+      const currentUpload = this.__doConcurrentUpload(dataFeeder).catch((err) => {
+        concurrentUploaderFailures.push(err);
+      });
+      this.concurrentUploaders.push(currentUpload);
+    }
+    await Promise.all(this.concurrentUploaders);
+    if (concurrentUploaderFailures.length >= 1) {
+      await this.markUploadAsAborted();
+      throw concurrentUploaderFailures[0];
+    }
+    if (this.abortController.signal.aborted) {
+      await this.markUploadAsAborted();
+      throw Object.assign(new Error("Upload aborted."), { name: "AbortError" });
+    }
+    let result;
+    if (this.isMultiPart) {
+      this.uploadedParts.sort((a, b) => a.PartNumber - b.PartNumber);
+      const uploadCompleteParams = {
+        ...this.params,
+        Body: void 0,
+        UploadId: this.uploadId,
+        MultipartUpload: {
+          Parts: this.uploadedParts
+        }
+      };
+      result = await this.client.send(new import_client_s3.CompleteMultipartUploadCommand(uploadCompleteParams));
+      if (typeof (result == null ? void 0 : result.Location) === "string" && result.Location.includes("%2F")) {
+        result.Location = result.Location.replace(/%2F/g, "/");
+      }
+    } else {
+      result = this.singleUploadResult;
+    }
+    this.abortMultipartUploadCommand = null;
+    if (this.tags.length) {
+      await this.client.send(
+        new import_client_s3.PutObjectTaggingCommand({
+          ...this.params,
+          Tagging: {
+            TagSet: this.tags
+          }
+        })
+      );
+    }
+    return result;
+  }
+  /**
+   * Abort the last multipart upload in progress
+   * if we know the upload id, the user did not specify to leave the parts, and
+   * we have a prepared AbortMultipartUpload command.
+   */
+  async markUploadAsAborted() {
+    if (this.uploadId && !this.leavePartsOnError && null !== this.abortMultipartUploadCommand) {
+      await this.client.send(this.abortMultipartUploadCommand);
+      this.abortMultipartUploadCommand = null;
+    }
+  }
+  __notifyProgress(progress) {
+    if (this.uploadEvent) {
+      this.emit(this.uploadEvent, progress);
+    }
+  }
+  async __abortTimeout(abortSignal) {
+    return new Promise((resolve, reject) => {
+      abortSignal.onabort = () => {
+        const abortError = new Error("Upload aborted.");
+        abortError.name = "AbortError";
+        reject(abortError);
+      };
+    });
+  }
+  __validateInput() {
+    if (!this.params) {
+      throw new Error(`InputError: Upload requires params to be passed to upload.`);
+    }
+    if (!this.client) {
+      throw new Error(`InputError: Upload requires a AWS client to do uploads with.`);
+    }
+    if (this.partSize < MIN_PART_SIZE) {
+      throw new Error(
+        `EntityTooSmall: Your proposed upload partsize [${this.partSize}] is smaller than the minimum allowed size [${MIN_PART_SIZE}] (5MB)`
+      );
+    }
+    if (this.queueSize < 1) {
+      throw new Error(`Queue size: Must have at least one uploading queue.`);
+    }
+  }
+};
+__name(_Upload, "Upload");
+var Upload = _Upload;
+// Annotate the CommonJS export names for ESM import in node:
+
+0 && (0);
+
+
+
+/***/ }),
+
+/***/ 3407:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ClientDefaultValues = void 0;
+const fs_1 = __nccwpck_require__(7147);
+const runtimeConfig_shared_1 = __nccwpck_require__(9583);
+exports.ClientDefaultValues = {
+    ...runtimeConfig_shared_1.ClientSharedValues,
+    runtime: "node",
+    lstatSync: fs_1.lstatSync,
+};
+
+
+/***/ }),
+
+/***/ 9583:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ClientSharedValues = void 0;
+exports.ClientSharedValues = {
+    lstatSync: () => { },
+};
+
+
+/***/ }),
+
 /***/ 6689:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -22830,6 +23366,92 @@ var _XmlNode = class _XmlNode {
 };
 __name(_XmlNode, "XmlNode");
 var XmlNode = _XmlNode;
+// Annotate the CommonJS export names for ESM import in node:
+
+0 && (0);
+
+
+
+/***/ }),
+
+/***/ 7020:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/index.ts
+var src_exports = {};
+__export(src_exports, {
+  AbortController: () => AbortController,
+  AbortHandler: () => import_types.AbortHandler,
+  AbortSignal: () => AbortSignal,
+  IAbortController: () => import_types.AbortController,
+  IAbortSignal: () => import_types.AbortSignal
+});
+module.exports = __toCommonJS(src_exports);
+
+// src/AbortController.ts
+
+
+// src/AbortSignal.ts
+var import_types = __nccwpck_require__(5756);
+var _AbortSignal = class _AbortSignal {
+  constructor() {
+    this.onabort = null;
+    this._aborted = false;
+    Object.defineProperty(this, "_aborted", {
+      value: false,
+      writable: true
+    });
+  }
+  /**
+   * Whether the associated operation has already been cancelled.
+   */
+  get aborted() {
+    return this._aborted;
+  }
+  /**
+   * @internal
+   */
+  abort() {
+    this._aborted = true;
+    if (this.onabort) {
+      this.onabort(this);
+      this.onabort = null;
+    }
+  }
+};
+__name(_AbortSignal, "AbortSignal");
+var AbortSignal = _AbortSignal;
+
+// src/AbortController.ts
+var _AbortController = class _AbortController {
+  constructor() {
+    this.signal = new AbortSignal();
+  }
+  abort() {
+    this.signal.abort();
+  }
+};
+__name(_AbortController, "AbortController");
+var AbortController = _AbortController;
 // Annotate the CommonJS export names for ESM import in node:
 
 0 && (0);
@@ -45159,6 +45781,68 @@ const unescape = (s, { windowsPathsNoEscape = false, } = {}) => {
 };
 exports.unescape = unescape;
 //# sourceMappingURL=unescape.js.map
+
+/***/ }),
+
+/***/ 1533:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateETag = void 0;
+var s3Etag_js_1 = __nccwpck_require__(487);
+Object.defineProperty(exports, "generateETag", ({ enumerable: true, get: function () { return s3Etag_js_1.generateETag; } }));
+
+
+/***/ }),
+
+/***/ 487:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateETag = exports.defaultPartSizeInBytes = void 0;
+/**
+ * Generate an S3 ETAG (with multipart support)
+ * An implementation of this algorithm: https://stackoverflow.com/a/19896823/492325
+ * Author: Richard Willis <willis.rh@gmail.com>
+ */
+const fs_1 = __importDefault(__nccwpck_require__(7147));
+const crypto_1 = __importDefault(__nccwpck_require__(6113));
+exports.defaultPartSizeInBytes = 5 * 1024 * 1024; // 5MB
+function md5(contents) {
+    return crypto_1.default.createHash('md5').update(contents).digest('hex');
+}
+function generateETag(filePath, partSizeInBytes = 0) {
+    const { size: fileSizeInBytes } = fs_1.default.statSync(filePath);
+    if (partSizeInBytes === 0 || fileSizeInBytes <= partSizeInBytes) {
+        return md5(fs_1.default.readFileSync(filePath));
+    }
+    let parts = Math.floor(fileSizeInBytes / partSizeInBytes);
+    if (fileSizeInBytes % partSizeInBytes > 0) {
+        parts += 1;
+    }
+    const fileDescriptor = fs_1.default.openSync(filePath, 'r');
+    let totalMd5 = '';
+    for (let part = 0; part < parts; part++) {
+        const skipBytes = partSizeInBytes * part;
+        const totalBytesLeft = fileSizeInBytes - skipBytes;
+        const bytesToRead = Math.min(totalBytesLeft, partSizeInBytes);
+        const buffer = Buffer.alloc(bytesToRead);
+        fs_1.default.readSync(fileDescriptor, buffer, 0, bytesToRead, skipBytes);
+        totalMd5 += md5(buffer);
+    }
+    const combinedHash = md5(Buffer.from(totalMd5, 'hex'));
+    const etag = `${combinedHash}-${parts}`;
+    return etag;
+}
+exports.generateETag = generateETag;
+
 
 /***/ }),
 

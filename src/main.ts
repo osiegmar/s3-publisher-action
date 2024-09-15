@@ -171,17 +171,17 @@ function isFileSizeChange(syncFile: SyncFile, remoteFile: RemoteFile): boolean {
     if (syncFile.size === remoteFile.size) {
         return false
     }
-    core.debug(`File size change (${remoteFile.size} -> ${syncFile.size})`)
+    core.debug(`File size of ${syncFile.filename} change (${remoteFile.size} -> ${syncFile.size})`)
     return true
 }
 
 function isEtagChange(syncFile: SyncFile, remoteFile: RemoteFile): boolean {
-    const localMd5: string = syncFile.checksum.toString('hex')
+    const localMd5: string = syncFile.checksum
     const remoteMd5: string = remoteFile.etag.substring(1, remoteFile.etag.lastIndexOf('"'))
     if (remoteMd5 === localMd5) {
         return false
     }
-    core.debug(`Etag changed ('${remoteMd5}' -> '${localMd5}')`)
+    core.debug(`Etag of ${syncFile.filename} changed ('${remoteMd5}' -> '${localMd5}')`)
     return true
 }
 

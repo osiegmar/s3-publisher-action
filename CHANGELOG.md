@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2024-09-15
 ### Added
-- Multipart upload support for S3
+- Multipart upload support for S3 #78
 
 ## 1.0.0 - 2024-08-20
 

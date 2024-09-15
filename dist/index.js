@@ -29,15 +29,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const fs = __importStar(__nccwpck_require__(7147));
@@ -45,86 +36,84 @@ const path = __importStar(__nccwpck_require__(1017));
 const minimatch_1 = __nccwpck_require__(4501);
 const s3_1 = __nccwpck_require__(1863);
 const types_1 = __nccwpck_require__(8164);
-function run() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const bucket = core.getInput('bucket', { required: true });
-        const prefix = core.getInput('prefix');
-        const srcDir = core.getInput('dir', { required: true });
-        const includes = core.getMultilineInput('includes', { required: true });
-        const excludes = core.getMultilineInput('excludes');
-        const order = core.getInput('order').split(',');
-        const cacheControl = readCacheControlConfig(core.getMultilineInput('cache-control'));
-        const force = core.getBooleanInput('force-upload', {
-            required: true
-        });
-        const deleteOrphan = core.getBooleanInput('delete-orphaned', {
-            required: true
-        });
-        const waitBeforeDelete = Number(core.getInput('wait-before-delete'));
-        const dryRun = core.getBooleanInput('dry-run', { required: true });
-        const client = new s3_1.S3(bucket, prefix, cacheControl, dryRun);
-        core.info(`Sync files from ${srcDir} (includes=${includes}, excludes=${excludes}, order=${order})`);
-        try {
-            // 1) List phase
-            // list remote and local files
-            const remoteFilesPromise = client.listRemoteFiles();
-            process.chdir(srcDir);
-            const syncFiles = getAllFiles('.')
-                .filter(globFilter(includes, excludes))
-                .map(f => new types_1.SyncFile(f));
-            const remoteFiles = yield remoteFilesPromise;
-            const remoteFilenames = Object.keys(remoteFiles).filter(globFilter(includes, excludes));
-            // 2) Check phase
-            const newFiles = [];
-            const modifiedFiles = [];
-            const deletedFiles = [];
-            // Determine new and modified files
-            for (const syncFile of syncFiles) {
-                const localFilename = syncFile.filename;
-                if (!remoteFilenames.includes(localFilename)) {
-                    core.debug(`Add new file to list ${localFilename}`);
-                    newFiles.push(syncFile);
-                }
-                else if (force || isFileChange(syncFile, remoteFiles[localFilename])) {
-                    core.debug(`Add modified file to list ${localFilename}`);
-                    modifiedFiles.push(syncFile);
-                }
-            }
-            // Determine orphaned files
-            if (deleteOrphan) {
-                for (const remoteFile of remoteFilenames) {
-                    if (!syncFiles.map(f => f.filename).includes(remoteFile)) {
-                        core.debug(`Add orphaned file to list ${remoteFile}`);
-                        deletedFiles.push(remoteFile);
-                    }
-                }
-            }
-            // 3) Sync phase
-            if (newFiles.length > 0) {
-                core.info(`Upload ${newFiles.length} new files`);
-                const sortedFiles = newFiles.sort((p1, p2) => globPos(p1.filename, order) - globPos(p2.filename, order));
-                yield client.uploadFiles(sortedFiles);
-            }
-            if (modifiedFiles.length > 0) {
-                core.info(`Upload ${modifiedFiles.length} modified files (force=${force})`);
-                const sortedFiles = modifiedFiles.sort((p1, p2) => globPos(p1.filename, order) - globPos(p2.filename, order));
-                yield client.uploadFiles(sortedFiles);
-            }
-            if (deletedFiles.length > 0) {
-                if (!dryRun && waitBeforeDelete) {
-                    core.info(`Wait ${waitBeforeDelete} milliseconds before deleting files (prevent failed access to stale references)`);
-                    yield new Promise(r => setTimeout(r, waitBeforeDelete));
-                }
-                core.info(`Delete ${deletedFiles.length} orphaned files`);
-                yield client.deleteFiles(deletedFiles);
-            }
-            core.info(`Complete (${newFiles.length} added, ${modifiedFiles.length} updated, ${deletedFiles.length} deleted)`);
-        }
-        catch (error) {
-            if (error instanceof Error)
-                core.setFailed(error.message);
-        }
+async function run() {
+    const bucket = core.getInput('bucket', { required: true });
+    const prefix = core.getInput('prefix');
+    const srcDir = core.getInput('dir', { required: true });
+    const includes = core.getMultilineInput('includes', { required: true });
+    const excludes = core.getMultilineInput('excludes');
+    const order = core.getInput('order').split(',');
+    const cacheControl = readCacheControlConfig(core.getMultilineInput('cache-control'));
+    const force = core.getBooleanInput('force-upload', {
+        required: true
     });
+    const deleteOrphan = core.getBooleanInput('delete-orphaned', {
+        required: true
+    });
+    const waitBeforeDelete = Number(core.getInput('wait-before-delete'));
+    const dryRun = core.getBooleanInput('dry-run', { required: true });
+    const client = new s3_1.S3(bucket, prefix, cacheControl, dryRun);
+    core.info(`Sync files from ${srcDir} (includes=${includes}, excludes=${excludes}, order=${order})`);
+    try {
+        // 1) List phase
+        // list remote and local files
+        const remoteFilesPromise = client.listRemoteFiles();
+        process.chdir(srcDir);
+        const syncFiles = getAllFiles('.')
+            .filter(globFilter(includes, excludes))
+            .map(f => new types_1.SyncFile(f));
+        const remoteFiles = await remoteFilesPromise;
+        const remoteFilenames = Object.keys(remoteFiles).filter(globFilter(includes, excludes));
+        // 2) Check phase
+        const newFiles = [];
+        const modifiedFiles = [];
+        const deletedFiles = [];
+        // Determine new and modified files
+        for (const syncFile of syncFiles) {
+            const localFilename = syncFile.filename;
+            if (!remoteFilenames.includes(localFilename)) {
+                core.debug(`Add new file to list ${localFilename}`);
+                newFiles.push(syncFile);
+            }
+            else if (force || isFileChange(syncFile, remoteFiles[localFilename])) {
+                core.debug(`Add modified file to list ${localFilename}`);
+                modifiedFiles.push(syncFile);
+            }
+        }
+        // Determine orphaned files
+        if (deleteOrphan) {
+            for (const remoteFile of remoteFilenames) {
+                if (!syncFiles.map(f => f.filename).includes(remoteFile)) {
+                    core.debug(`Add orphaned file to list ${remoteFile}`);
+                    deletedFiles.push(remoteFile);
+                }
+            }
+        }
+        // 3) Sync phase
+        if (newFiles.length > 0) {
+            core.info(`Upload ${newFiles.length} new files`);
+            const sortedFiles = newFiles.sort((p1, p2) => globPos(p1.filename, order) - globPos(p2.filename, order));
+            await client.uploadFiles(sortedFiles);
+        }
+        if (modifiedFiles.length > 0) {
+            core.info(`Upload ${modifiedFiles.length} modified files (force=${force})`);
+            const sortedFiles = modifiedFiles.sort((p1, p2) => globPos(p1.filename, order) - globPos(p2.filename, order));
+            await client.uploadFiles(sortedFiles);
+        }
+        if (deletedFiles.length > 0) {
+            if (!dryRun && waitBeforeDelete) {
+                core.info(`Wait ${waitBeforeDelete} milliseconds before deleting files (prevent failed access to stale references)`);
+                await new Promise(r => setTimeout(r, waitBeforeDelete));
+            }
+            core.info(`Delete ${deletedFiles.length} orphaned files`);
+            await client.deleteFiles(deletedFiles);
+        }
+        core.info(`Complete (${newFiles.length} added, ${modifiedFiles.length} updated, ${deletedFiles.length} deleted)`);
+    }
+    catch (error) {
+        if (error instanceof Error)
+            core.setFailed(error.message);
+    }
 }
 function readCacheControlConfig(config) {
     const ret = [];
@@ -228,15 +217,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -258,85 +238,79 @@ class S3 {
         this.cacheControl = cacheControl;
         this.dryRun = dryRun;
     }
-    listRemoteFiles() {
-        return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c, _d;
-            const files = {};
-            let ContinuationToken = undefined;
-            for (;;) {
-                const command = new client_s3_1.ListObjectsV2Command({
-                    Bucket: this.bucket,
-                    Prefix: this.prefix,
-                    ContinuationToken
-                });
-                const response = yield this.client.send(command);
-                if (response.$metadata.httpStatusCode !== 200) {
-                    throw new Error(`Failed to list objects in bucket ${this.bucket}:
+    async listRemoteFiles() {
+        var _a, _b, _c, _d;
+        const files = {};
+        let ContinuationToken = undefined;
+        for (;;) {
+            const command = new client_s3_1.ListObjectsV2Command({
+                Bucket: this.bucket,
+                Prefix: this.prefix,
+                ContinuationToken
+            });
+            const response = await this.client.send(command);
+            if (response.$metadata.httpStatusCode !== 200) {
+                throw new Error(`Failed to list objects in bucket ${this.bucket}:
                     S3 responded with status ${response.$metadata.httpStatusCode}`);
-                }
-                for (const e of (_a = response.Contents) !== null && _a !== void 0 ? _a : []) {
-                    const filename = this.prefix ? (_b = e.Key) === null || _b === void 0 ? void 0 : _b.substring(this.prefix.length) : e.Key;
-                    if (filename) {
-                        files[filename] = {
-                            filename,
-                            size: (_c = e.Size) !== null && _c !== void 0 ? _c : 0,
-                            etag: (_d = e.ETag) !== null && _d !== void 0 ? _d : ''
-                        };
-                    }
-                }
-                if (!response.IsTruncated) {
-                    break;
-                }
-                ContinuationToken = response.NextContinuationToken;
             }
-            return files;
+            for (const e of (_a = response.Contents) !== null && _a !== void 0 ? _a : []) {
+                const filename = this.prefix ? (_b = e.Key) === null || _b === void 0 ? void 0 : _b.substring(this.prefix.length) : e.Key;
+                if (filename) {
+                    files[filename] = {
+                        filename,
+                        size: (_c = e.Size) !== null && _c !== void 0 ? _c : 0,
+                        etag: (_d = e.ETag) !== null && _d !== void 0 ? _d : ''
+                    };
+                }
+            }
+            if (!response.IsTruncated) {
+                break;
+            }
+            ContinuationToken = response.NextContinuationToken;
+        }
+        return files;
+    }
+    async uploadFiles(syncFiles) {
+        await async_1.default.mapLimit(syncFiles, 5, async (syncFile) => {
+            await this.uploadFile(syncFile);
         });
     }
-    uploadFiles(syncFiles) {
-        return __awaiter(this, void 0, void 0, function* () {
-            yield async_1.default.mapLimit(syncFiles, 5, (syncFile) => __awaiter(this, void 0, void 0, function* () {
-                yield this.uploadFile(syncFile);
-            }));
-        });
-    }
-    uploadFile(syncFile) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const destFile = this.prefix + syncFile.filename;
-            const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream';
-            const cacheControl = this.resolveCacheControl(syncFile.filename);
-            core.info(`Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`);
-            if (this.dryRun) {
-                return;
-            }
-            // Due to https://github.com/aws/aws-sdk-js-v3/issues/4321, we can't set the ContentMD5 header
-            const upload = new lib_storage_1.Upload({
-                client: this.client,
-                partSize: types_1.PART_SIZE,
-                queueSize: 2,
-                params: {
-                    Bucket: this.bucket,
-                    Key: destFile,
-                    ContentLength: syncFile.size,
-                    // ContentMD5: syncFile.checksum,
-                    ContentType: contentType,
-                    CacheControl: cacheControl,
-                    Body: fs_1.default.createReadStream(syncFile.filename)
-                }
-            });
-            upload.on('httpUploadProgress', progress => {
-                if (progress.loaded && progress.total && progress.loaded < progress.total) {
-                    const pct = Math.floor((progress.loaded / progress.total) * 100);
-                    core.debug(`Uploaded ${pct} % of ${destFile}`);
-                }
-            });
-            try {
-                yield upload.done();
-                core.info(`Finished uploading ${destFile}`);
-            }
-            catch (e) {
-                core.error(`Error uploading to ${destFile}: ${e}`);
+    async uploadFile(syncFile) {
+        const destFile = this.prefix + syncFile.filename;
+        const contentType = mime.lookup(syncFile.filename) || 'application/octet-stream';
+        const cacheControl = this.resolveCacheControl(syncFile.filename);
+        core.info(`Uploading s3://${this.bucket}/${destFile} (type=${contentType}; Cache-Control=${cacheControl})`);
+        if (this.dryRun) {
+            return;
+        }
+        // Due to https://github.com/aws/aws-sdk-js-v3/issues/4321, we can't set the ContentMD5 header
+        const upload = new lib_storage_1.Upload({
+            client: this.client,
+            partSize: types_1.PART_SIZE,
+            queueSize: 2,
+            params: {
+                Bucket: this.bucket,
+                Key: destFile,
+                ContentLength: syncFile.size,
+                // ContentMD5: syncFile.checksum,
+                ContentType: contentType,
+                CacheControl: cacheControl,
+                Body: fs_1.default.createReadStream(syncFile.filename)
             }
         });
+        upload.on('httpUploadProgress', progress => {
+            if (progress.loaded && progress.total && progress.loaded < progress.total) {
+                const pct = Math.floor((progress.loaded / progress.total) * 100);
+                core.debug(`Uploaded ${pct} % of ${destFile}`);
+            }
+        });
+        try {
+            await upload.done();
+            core.info(`Finished uploading ${destFile}`);
+        }
+        catch (e) {
+            core.error(`Error uploading to ${destFile}: ${e}`);
+        }
     }
     resolveCacheControl(filename) {
         for (const cc of this.cacheControl) {
@@ -346,22 +320,20 @@ class S3 {
         }
         return undefined;
     }
-    deleteFiles(remoteFiles) {
-        return __awaiter(this, void 0, void 0, function* () {
-            var _a;
-            if (this.dryRun) {
-                return;
+    async deleteFiles(remoteFiles) {
+        var _a;
+        if (this.dryRun) {
+            return;
+        }
+        const response = await this.client.send(new client_s3_1.DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: {
+                Objects: remoteFiles.map(fn => ({ Key: fn }))
             }
-            const response = yield this.client.send(new client_s3_1.DeleteObjectsCommand({
-                Bucket: this.bucket,
-                Delete: {
-                    Objects: remoteFiles.map(fn => ({ Key: fn }))
-                }
-            }));
-            for (const e of (_a = response.Deleted) !== null && _a !== void 0 ? _a : []) {
-                core.info(`Deleted ${e.Key}`);
-            }
-        });
+        }));
+        for (const e of (_a = response.Deleted) !== null && _a !== void 0 ? _a : []) {
+            core.info(`Deleted ${e.Key}`);
+        }
     }
 }
 exports.S3 = S3;

@@ -17,8 +17,8 @@
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^1.11.1",
-    "@aws-sdk/client-s3": "^3.670.0",
-    "@aws-sdk/lib-storage": "^3.670.0",
+    "@aws-sdk/client-s3": "^3.685.0",
+    "@aws-sdk/lib-storage": "^3.685.0",
     "@types/async": "^3.2.24",
     "async": "^3.2.6",
     "mime-types": "^2.1.35",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@types/mime-types": "^2.1.4",
-    "@types/node": "^22.7.5",
+    "@types/node": "^22.8.6",
     "@vercel/ncc": "^0.38.2",
     "eslint": "^8.57.0",
     "eslint-plugin-github": "^5.0.2",

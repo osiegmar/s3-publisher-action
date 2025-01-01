@@ -17,8 +17,8 @@
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^1.11.1",
-    "@aws-sdk/client-s3": "^3.670.0",
-    "@aws-sdk/lib-storage": "^3.670.0",
+    "@aws-sdk/client-s3": "^3.717.0",
+    "@aws-sdk/lib-storage": "^3.717.0",
     "@types/async": "^3.2.24",
     "async": "^3.2.6",
     "mime-types": "^2.1.35",
@@ -27,14 +27,14 @@
   },
   "devDependencies": {
     "@types/mime-types": "^2.1.4",
-    "@types/node": "^22.7.5",
-    "@vercel/ncc": "^0.38.2",
+    "@types/node": "^22.10.3",
+    "@vercel/ncc": "^0.38.3",
     "eslint": "^8.57.0",
-    "eslint-plugin-github": "^5.0.2",
-    "eslint-plugin-jest": "^28.8.3",
+    "eslint-plugin-github": "^5.1.4",
+    "eslint-plugin-jest": "^28.10.0",
     "jest": "^29.7.0",
-    "prettier": "^3.3.3",
+    "prettier": "^3.4.2",
     "ts-jest": "^29.2.5",
-    "typescript": "^5.6.3"
+    "typescript": "^5.7.2"
   }
 }

@@ -4,7 +4,7 @@ import fs from 'fs'
 import * as core from '@actions/core'
 import {minimatch} from 'minimatch'
 import {RemoteFiles, SyncFile, CacheControl, PART_SIZE} from './types'
-import async from 'async'
+import {mapLimit} from 'async'
 import {Upload} from '@aws-sdk/lib-storage'
 
 export class S3 {
@@ -61,7 +61,7 @@ export class S3 {
     }
 
     async uploadFiles(syncFiles: SyncFile[]): Promise<void> {
-        await async.mapLimit(syncFiles, 5, async (syncFile: SyncFile) => {
+        await mapLimit(syncFiles, 5, async (syncFile: SyncFile) => {
             await this.uploadFile(syncFile)
         })
     }

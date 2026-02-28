@@ -22,7 +22,7 @@
     "@types/async": "^3.2.25",
     "async": "^3.2.6",
     "mime-types": "^2.1.35",
-    "minimatch": "^10.0.3",
+    "minimatch": "^10.2.4",
     "s3-etag": "^1.0.5"
   },
   "devDependencies": {

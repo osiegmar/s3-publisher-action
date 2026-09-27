@@ -10,6 +10,29 @@ and this project adheres to
 
 - Nothing yet
 
+## [3.0.1] - 2026-09-27
+
+### Fixed
+
+- Prevent flooding stdout on buckets with huge numbers of objects, which could
+  crash the action with `write EINVAL` (#124). Debug output is only written when
+  debug logging is enabled, per-file logging while filtering/diffing the remote
+  object set was removed, and delete logging is aggregated above 1000 files.
+
+### Security
+
+- Updated `@actions/core` dependencies, bundling `undici` 6.29.0 to fix multiple
+  vulnerabilities (HTTP request smuggling, CRLF/header injection, WebSocket
+  denial of service).
+- Updated `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` to 3.1141.0, which no
+  longer depend on the vulnerable `fast-xml-parser`.
+
+### Changed
+
+- Updated all development dependencies to their latest versions, including
+  TypeScript 6.
+- Updated GitHub Actions used in workflows to their latest major versions.
+
 ## [3.0.0] - 2026-06-10
 
 ### Changed
@@ -67,7 +90,8 @@ and this project adheres to
 - Initial release
 
 [Unreleased]:
-  https://github.com/osiegmar/s3-publisher-action/compare/v3.0.0...main
+  https://github.com/osiegmar/s3-publisher-action/compare/v3.0.1...main
+[3.0.1]: https://github.com/osiegmar/s3-publisher-action/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/osiegmar/s3-publisher-action/compare/v2.0.1...v3.0.0
 [2.0.0]: https://github.com/osiegmar/s3-publisher-action/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/osiegmar/s3-publisher-action/compare/v1.1.0...v1.1.1

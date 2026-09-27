@@ -17,9 +17,11 @@
     "outDir": "./dist",
     "pretty": true,
     "resolveJsonModule": true,
+    "rootDir": ".",
     "strict": true,
     "strictNullChecks": true,
-    "target": "ES2023"
+    "target": "ES2023",
+    "types": ["node"]
   },
   "exclude": ["coverage", "dist", "node_modules", "**/*.test.ts"],
   "include": ["src"]

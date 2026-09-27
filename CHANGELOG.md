@@ -47,6 +47,13 @@ and this project adheres to
 - Clarify in the docs that the `s3:DeleteObject` permission is only required
   when using `delete-orphaned`
 
+## [2.0.1] - 2026-03-07
+
+### Fixed
+
+- Log the reason for re-uploading a modified file at debug level instead of info
+  level to reduce log noise
+
 ## [2.0.0] - 2026-02-28
 
 ### Changed
@@ -93,6 +100,7 @@ and this project adheres to
   https://github.com/osiegmar/s3-publisher-action/compare/v3.0.1...main
 [3.0.1]: https://github.com/osiegmar/s3-publisher-action/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/osiegmar/s3-publisher-action/compare/v2.0.1...v3.0.0
+[2.0.1]: https://github.com/osiegmar/s3-publisher-action/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/osiegmar/s3-publisher-action/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/osiegmar/s3-publisher-action/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/osiegmar/s3-publisher-action/compare/v1.0.0...v1.1.0

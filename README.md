@@ -170,6 +170,11 @@ already. Read
 
 **dir**: The source directory where your files to publish resides in.
 
+All globs (`includes`, `excludes`, `order`, `cache-control`) are matched against
+the file path relative to `dir`. Globs without a slash (e.g. `*.html`) match
+files in any directory; globs with a slash (e.g. `assets/**`) match the full
+relative path.
+
 **includes**: The file globs to include. By default, all files (`**/*`) are
 included. You can define multiple globs with this multiline input. Files that
 are both included **and** excluded are effectively **excluded**.

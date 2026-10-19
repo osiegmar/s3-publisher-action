@@ -28739,6 +28739,14 @@ function endGroup() {
     issue('endgroup');
 }
 
+// core.debug() writes to stdout even when debug logging is disabled;
+// unguarded per-file logging can crash Node on huge file sets (issue #124)
+function debug(message) {
+    if (isDebug()) {
+        debug$1(message);
+    }
+}
+
 var utils = {};
 
 var constants;
@@ -31256,14 +31264,6 @@ function requirePicomatch () {
 var picomatchExports = /*@__PURE__*/ requirePicomatch();
 var picomatch = /*@__PURE__*/getDefaultExportFromCjs(picomatchExports);
 
-// core.debug() writes to stdout even when debug logging is disabled;
-// unguarded per-file logging can crash Node on huge file sets (issue #124)
-function debug(message) {
-    if (isDebug()) {
-        debug$1(message);
-    }
-}
-
 /**
  * Generate an S3 ETAG (with multipart support)
  * An implementation of this algorithm: https://stackoverflow.com/a/19896823/492325
@@ -31299,7 +31299,12 @@ function generateETag(filePath, partSizeInBytes = 0) {
 // While 5 MB is the minimum part size for a multipart upload,
 // the current default part size used by AWS is 16 MB.
 const PART_SIZE = 16 * 1024 * 1024;
-const GLOB_OPTIONS = { basename: true, dot: true };
+// Globs without a slash match the basename in any directory; globs with a
+// slash match the full relative path. picomatch's own `basename` option is
+// applied to every glob (despite its docs), hence the explicit check.
+function globMatcher(glob) {
+    return picomatch(glob, { dot: true, basename: !glob.includes('/') });
+}
 class SyncFile {
     _filename;
     _size;
@@ -31356,11 +31361,11 @@ function listLocalFiles(dirPath, results = []) {
 function globFilter(includes, excludes, logDebug = true) {
     const excludeMatchers = excludes.map((e) => ({
         pattern: e,
-        match: picomatch(e, GLOB_OPTIONS)
+        match: globMatcher(e)
     }));
     const includeMatchers = includes.map((i) => ({
         pattern: i,
-        match: picomatch(i, GLOB_OPTIONS)
+        match: globMatcher(i)
     }));
     return (p) => {
         for (const { pattern, match } of excludeMatchers) {
@@ -31383,7 +31388,7 @@ function globFilter(includes, excludes, logDebug = true) {
     };
 }
 function sortByGlob(files, order) {
-    const matchers = order.filter((g) => g).map((g) => picomatch(g, GLOB_OPTIONS));
+    const matchers = order.filter((g) => g).map(globMatcher);
     return files.toSorted((a, b) => matcherSortOrder(a.filename, matchers) -
         matcherSortOrder(b.filename, matchers));
 }
@@ -62304,7 +62309,7 @@ class S3 {
         this.bucket = bucket;
         this.cacheControlMatchers = cacheControl.map((cc) => ({
             headerValue: cc.headerValue,
-            match: picomatch(cc.glob, GLOB_OPTIONS)
+            match: globMatcher(cc.glob)
         }));
         this.dryRun = dryRun;
         this.dryPrefix = dryRunPrefix(dryRun);

@@ -187,6 +187,18 @@ describe('S3', () => {
       expect(s3.resolveCacheControl('index.html')).toBe('max-age=60')
     })
 
+    it('should match globs containing a slash against the full path', () => {
+      const cc = [
+        { glob: '_astro/**', headerValue: 'immutable' },
+        { glob: '*.html', headerValue: 'max-age=30' }
+      ]
+      const s3 = new S3('my-bucket', '', cc, false)
+      expect(s3.resolveCacheControl('_astro/a.js')).toBe('immutable')
+      expect(s3.resolveCacheControl('index.html')).toBe('max-age=30')
+      expect(s3.resolveCacheControl('de/index.html')).toBe('max-age=30')
+      expect(s3.resolveCacheControl('robots.txt')).toBeUndefined()
+    })
+
     it('should return undefined when no glob matches', () => {
       const cc = [{ glob: '*.html', headerValue: 'max-age=3600' }]
       const s3 = new S3('my-bucket', '', cc, false)

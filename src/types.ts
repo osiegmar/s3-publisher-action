@@ -1,4 +1,5 @@
 import fs from 'fs'
+import picomatch from 'picomatch'
 import { generateETag } from 's3-etag'
 
 // While 5 MB is the minimum part size for a multipart upload,
@@ -10,7 +11,12 @@ export type RemoteFile = {
   etag: string
 }
 
-export const GLOB_OPTIONS = { basename: true, dot: true } as const
+// Globs without a slash match the basename in any directory; globs with a
+// slash match the full relative path. picomatch's own `basename` option is
+// applied to every glob (despite its docs), hence the explicit check.
+export function globMatcher(glob: string): (input: string) => boolean {
+  return picomatch(glob, { dot: true, basename: !glob.includes('/') })
+}
 
 export type RemoteFiles = {
   [key: string]: RemoteFile

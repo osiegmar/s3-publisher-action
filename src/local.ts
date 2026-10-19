@@ -1,8 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import picomatch from 'picomatch'
 import { debug } from './log.js'
-import { GLOB_OPTIONS, SyncFile } from './types.js'
+import { globMatcher, SyncFile } from './types.js'
 
 export function listLocalFiles(
   dirPath: string,
@@ -28,11 +27,11 @@ export function globFilter(
 ): (p: string) => boolean {
   const excludeMatchers = excludes.map((e) => ({
     pattern: e,
-    match: picomatch(e, GLOB_OPTIONS)
+    match: globMatcher(e)
   }))
   const includeMatchers = includes.map((i) => ({
     pattern: i,
-    match: picomatch(i, GLOB_OPTIONS)
+    match: globMatcher(i)
   }))
   return (p: string) => {
     for (const { pattern, match } of excludeMatchers) {
@@ -53,7 +52,7 @@ export function globFilter(
 }
 
 export function sortByGlob(files: SyncFile[], order: string[]): SyncFile[] {
-  const matchers = order.filter((g) => g).map((g) => picomatch(g, GLOB_OPTIONS))
+  const matchers = order.filter((g) => g).map(globMatcher)
   return files.toSorted(
     (a, b) =>
       matcherSortOrder(a.filename, matchers) -

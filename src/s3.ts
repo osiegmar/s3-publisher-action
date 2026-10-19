@@ -7,13 +7,12 @@ import * as mime from 'mime-types'
 import fs from 'fs'
 import * as core from '@actions/core'
 import { performance } from 'perf_hooks'
-import picomatch from 'picomatch'
 import {
   RemoteFiles,
   SyncFile,
   CacheControl,
   PART_SIZE,
-  GLOB_OPTIONS,
+  globMatcher,
   dryRunPrefix,
   formatElapsed,
   formatSize
@@ -47,7 +46,7 @@ export class S3 {
     this.bucket = bucket
     this.cacheControlMatchers = cacheControl.map((cc) => ({
       headerValue: cc.headerValue,
-      match: picomatch(cc.glob, GLOB_OPTIONS)
+      match: globMatcher(cc.glob)
     }))
     this.dryRun = dryRun
     this.dryPrefix = dryRunPrefix(dryRun)

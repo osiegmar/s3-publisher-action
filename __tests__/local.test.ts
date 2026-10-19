@@ -52,6 +52,33 @@ describe('globFilter', () => {
     expect(filter('sub/dir/page.html')).toBe(true)
   })
 
+  it('should match globs containing a slash against the full path', () => {
+    const filter = globFilter(['_astro/**'], [])
+    expect(filter('_astro/a.js')).toBe(true)
+    expect(filter('_astro/sub/b.css')).toBe(true)
+    expect(filter('index.html')).toBe(false)
+    expect(filter('de/_astro/a.js')).toBe(false)
+  })
+
+  it('should match ** and **/*.html globs in subdirs', () => {
+    const all = globFilter(['**/*'], [])
+    expect(all('index.html')).toBe(true)
+    expect(all('_astro/a.js')).toBe(true)
+    expect(all('.well-known/x')).toBe(true)
+
+    const html = globFilter(['**/*.html'], [])
+    expect(html('index.html')).toBe(true)
+    expect(html('de/index.html')).toBe(true)
+    expect(html('_astro/a.js')).toBe(false)
+  })
+
+  it('should exclude by globs containing a slash', () => {
+    const filter = globFilter(['**/*'], ['_astro/**'])
+    expect(filter('_astro/a.js')).toBe(false)
+    expect(filter('index.html')).toBe(true)
+    expect(filter('de/index.html')).toBe(true)
+  })
+
   it('should not log when debug logging is disabled', () => {
     mockDebug.mockClear()
     mockIsDebug.mockReturnValue(false)
@@ -179,6 +206,40 @@ describe('sortByGlob', () => {
 
     expect(sorted[0].filename).toBe('index.html')
     expect(sorted[1].filename).toBe('style.css')
+  })
+
+  it('should sort by globs containing a slash', () => {
+    const files = [
+      makeSyncFile('de/index.html'),
+      makeSyncFile('index.html'),
+      makeSyncFile('_astro/a.js')
+    ]
+
+    const sorted = sortByGlob(files, ['_astro/**', '*.html'])
+
+    expect(sorted.map((f) => f.filename)).toEqual([
+      '_astro/a.js',
+      'de/index.html',
+      'index.html'
+    ])
+  })
+
+  it('should support negated extglob order to put html last', () => {
+    const files = [
+      makeSyncFile('de/index.html'),
+      makeSyncFile('index.html'),
+      makeSyncFile('_astro/a.js'),
+      makeSyncFile('robots.txt')
+    ]
+
+    const sorted = sortByGlob(files, ['!(*.html)'])
+
+    expect(sorted.map((f) => f.filename)).toEqual([
+      '_astro/a.js',
+      'robots.txt',
+      'de/index.html',
+      'index.html'
+    ])
   })
 
   it('should not mutate the original array', () => {

@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [3.0.2] - 2026-10-19
+
 ### Fixed
 
 - Globs containing a slash (e.g. `assets/**/*`, `_astro/**`) never matched in
@@ -105,7 +109,8 @@ and this project adheres to
 - Initial release
 
 [Unreleased]:
-  https://github.com/osiegmar/s3-publisher-action/compare/v3.0.1...main
+  https://github.com/osiegmar/s3-publisher-action/compare/v3.0.2...main
+[3.0.2]: https://github.com/osiegmar/s3-publisher-action/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/osiegmar/s3-publisher-action/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/osiegmar/s3-publisher-action/compare/v2.0.1...v3.0.0
 [2.0.1]: https://github.com/osiegmar/s3-publisher-action/compare/v2.0.0...v2.0.1

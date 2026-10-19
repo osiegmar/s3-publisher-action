@@ -12,7 +12,7 @@ and this project adheres to
 
 - Globs containing a slash (e.g. `assets/**/*`, `_astro/**`) never matched in
   `includes`, `excludes`, `order` and `cache-control`, because picomatch's
-  `basename` option was applied to every glob, testing it against the file name
+  `basename` option was applied to every glob, testing it against the filename
   only. Globs with a slash are now matched against the full relative path; globs
   without a slash (e.g. `*.html`) still match in any directory. This may change
   which files are included, excluded, ordered or get a Cache-Control header if

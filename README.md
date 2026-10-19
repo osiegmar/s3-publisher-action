@@ -208,10 +208,11 @@ Enable this setting in order to delete files that exists on S3 but are removed
 from your local files. You can use `dry-run` to see what would happen then.
 
 **wait-before-delete**: Time in milliseconds to wait until deleting files from
-the bucket. It can be beneficial to wait a few seconds before deleting orphaned
-files to let your users complete ongoing site loads (e.g. old HTML versions are
-already loaded and these are referring to some old CSS/JS files). By default, no
-wait will happen.
+the bucket. Old HTML versions may still be cached by browsers and CDNs and refer
+to old CSS/JS files. Set this longer than the cache time (`max-age`) of your
+HTML files (note: `max-age` is in seconds, `wait-before-delete` in milliseconds)
+so these assets remain available until all cached HTML has expired. By default,
+no wait will happen.
 
 **dry-run**: Do not perform any real data modification. No files will be
 uploaded or deleted.
@@ -229,8 +230,8 @@ uploaded or deleted.
       assets/**/*
       docs/**/*
     excludes: |
-      **/*.zip
-      **/*.bak
+      *.zip
+      *.bak
 ```
 
 **Full static site deployment — upload hashed assets first with long-lived cache
@@ -242,18 +243,20 @@ headers, use short cache times for HTML, and clean up orphaned files:**
     bucket: my-bucket-name
     dir: public
     delete-orphaned: true
-    wait-before-delete: 3000
+    wait-before-delete: 90000
     order: 'assets/**/*'
     cache-control: |
       assets/**/* = public, max-age=31536000, immutable
-      **/*.html = public, max-age=300
+      *.html = public, max-age=60
       **/* = public, max-age=3600
 ```
 
 This example reflects the approach described in
 [Why this action?](#why-this-action). Hashed assets are uploaded first and
 cached for one year with the `immutable` directive. HTML files are cached for
-only 5 minutes, so visitors quickly see the latest version pointing to the
+only one minute, so visitors quickly see the latest version pointing to the
 correct asset filenames. Everything else gets a moderate cache time. Orphaned
-files are cleaned up after a short delay to avoid breaking in-flight page loads.
-With this setup, no CloudFront invalidation is needed.
+files are deleted only after `wait-before-delete`, which must be longer than the
+HTML cache time (90000 ms = 90 s > `max-age=60` s); otherwise, cached old HTML
+pages still reference assets that no longer exist. With this setup, no
+CloudFront invalidation is needed.

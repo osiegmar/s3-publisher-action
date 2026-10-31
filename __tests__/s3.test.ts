@@ -90,16 +90,11 @@ describe('S3', () => {
       expect(mockSend).toHaveBeenCalledTimes(2)
     })
 
-    it('should throw on non-200 status', async () => {
-      mockSend.mockResolvedValueOnce({
-        $metadata: { httpStatusCode: 403 },
-        Contents: []
-      })
+    it('should propagate list errors', async () => {
+      mockSend.mockRejectedValueOnce(new Error('Access Denied'))
 
       const s3 = new S3('my-bucket', '', [], false)
-      await expect(s3.listRemoteFiles()).rejects.toThrow(
-        'Failed to list objects'
-      )
+      await expect(s3.listRemoteFiles()).rejects.toThrow('Access Denied')
     })
 
     it('should handle empty Contents', async () => {

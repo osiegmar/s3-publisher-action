@@ -62699,11 +62699,8 @@ class S3 {
                 Prefix: this.prefix,
                 ContinuationToken
             });
+            // the SDK throws on non-2xx responses
             const response = await this.client.send(command);
-            if (response.$metadata.httpStatusCode !== 200) {
-                throw new Error(`Failed to list objects in bucket ${this.bucket}:
-                    S3 responded with status ${response.$metadata.httpStatusCode}`);
-            }
             for (const e of response.Contents ?? []) {
                 const filename = this.prefix
                     ? e.Key?.substring(this.prefix.length)

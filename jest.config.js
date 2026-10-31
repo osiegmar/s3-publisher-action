@@ -6,6 +6,9 @@ export default {
   coverageDirectory: './coverage',
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
   coverageReporters: ['json-summary', 'text', 'lcov'],
+  coverageThreshold: {
+    global: { branches: 90, functions: 100, lines: 100, statements: 100 }
+  },
   extensionsToTreatAsEsm: ['.ts'],
   moduleFileExtensions: ['ts', 'js'],
   preset: 'ts-jest',

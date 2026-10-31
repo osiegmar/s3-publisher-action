@@ -16,7 +16,7 @@
     "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
     "format:write": "npx prettier --write .",
     "format:check": "npx prettier --check .",
-    "lint": "npx eslint .",
+    "lint": "npx eslint . --max-warnings 0",
     "local-action": "npx @github/local-action . src/main.ts .env",
     "package": "npx rimraf ./dist && npx rollup --config rollup.config.ts --failAfterWarnings",
     "package:watch": "npm run package -- --watch",

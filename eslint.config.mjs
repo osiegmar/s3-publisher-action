@@ -57,9 +57,9 @@ export default [
         { allowExpressions: true }
       ],
       '@typescript-eslint/no-inferrable-types': 'error',
-      '@typescript-eslint/no-non-null-assertion': 'warn',
-      '@typescript-eslint/prefer-for-of': 'warn',
-      '@typescript-eslint/prefer-function-type': 'warn'
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/prefer-for-of': 'error',
+      '@typescript-eslint/prefer-function-type': 'error'
     }
   }
 ]

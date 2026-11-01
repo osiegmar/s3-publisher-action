@@ -10,6 +10,18 @@ and this project adheres to
 
 - Nothing yet
 
+## [3.0.3] - 2026-11-01
+
+### Security
+
+- Updated the bundled `undici` to 6.29.1 to fix multiple vulnerabilities (TLS
+  certificate validation bypass, denial of service via EventSource parsing,
+  content encodings, TLS renegotiation and WebSocket PONG buffering).
+
+### Changed
+
+- Updated `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` to 3.1161.0.
+
 ## [3.0.2] - 2026-10-19
 
 ### Fixed
@@ -109,7 +121,8 @@ and this project adheres to
 - Initial release
 
 [Unreleased]:
-  https://github.com/osiegmar/s3-publisher-action/compare/v3.0.2...main
+  https://github.com/osiegmar/s3-publisher-action/compare/v3.0.3...main
+[3.0.3]: https://github.com/osiegmar/s3-publisher-action/compare/v3.0.2...v3.0.3
 [3.0.2]: https://github.com/osiegmar/s3-publisher-action/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/osiegmar/s3-publisher-action/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/osiegmar/s3-publisher-action/compare/v2.0.1...v3.0.0
